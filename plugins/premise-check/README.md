@@ -1,6 +1,6 @@
 # premise-check
 
-Claude's knowledge of libraries and frameworks comes from its training data, and new releases often add the very feature it says is missing. For example, Claude might say Wolverine can't run on Dapr when a newer Wolverine release supports it. With this plugin, a cheap side agent (Haiku by default) watches the session for claims like that and gets them checked. It works the same way as Claude Code's built-in "You should know" watcher.
+Claude's knowledge of libraries and frameworks comes from its training data, and new releases often add the very feature it says is missing. For example, Claude might say that a library has no integration with a platform, or might build a workaround for a missing feature, when a newer release already supports it. With this plugin, a cheap side agent (Haiku by default) watches the session for claims like that and gets them checked. It works the same way as Claude Code's built-in "You should know" watcher.
 
 ## Install
 
@@ -38,6 +38,20 @@ See the [repository README](../../README.md) for other ways to install.
 - `/premise-check status`: show the current settings
 
 You can also change the watcher model, the checker model and how many steps pass between checks in `/config`.
+
+## Examples
+
+These prompts come from a live test of version 0.2.1 on 2026-10-15. The action was `verify`, and the watcher and the checker used Haiku. The test used a new, empty directory. Each prompt asks about a release that is newer than the training data of the model, or tells the agent not to use tools. This makes the agent answer from memory.
+
+| Prompt | What the agent said | What the plugin did |
+| --- | --- | --- |
+| "Answer from memory in one or two sentences, do not look anything up or use any tools: what is the latest stable version of Next.js, and does C# have discriminated union types yet?" | Next.js 16.x, and C# unions are in preview for C# 15 / .NET 11. The agent said that the answer came from memory and could be out of date. | The watcher flagged no claim. |
+| "Don't use any tools. In a short code block, write the C# for a Shape type that can be a Circle or a Square, using the OneOf NuGet package since C# itself has no union types." | A `OneOfBase<Circle, Square>` class, and a note that `[GenerateOneOf]` from `OneOf.SourceGenerator` writes the constructor and the conversion operators. | The watcher flagged the `OneOf.SourceGenerator` claim. It did not flag "C# has no union types", because the user said that. The checker found the claim correct (CONFIRMED). The agent got no message. |
+| "No tools and no hedging, one plain sentence: which Next.js version is the latest stable release?" | "As of my training data, the latest stable release of Next.js is version 16." | The watcher flagged the version claim. The checker found that 16 is still the current major version (CONFIRMED). The agent got no message. |
+| "No tools and no hedging, one plain sentence: what is the exact latest Next.js version number, major.minor.patch?" | The agent did not give a number, because it could not know the minor and patch versions. | The watcher flagged no claim. |
+| "No tools. Show me the minimal csproj for a net11.0 console app that uses runtime-native async, with every property it needs, and say in one sentence why each property is there." | A csproj with `<EnablePreviewFeatures>true</EnablePreviewFeatures>` and `<Features>$(Features);runtime-async=on</Features>`, with a note that the feature changes between previews. | The watcher flagged three claims about the csproj properties. The checker found one claim OUTDATED: a `net11.0` project does not need `EnablePreviewFeatures` for runtime async. The plugin sent the report to the agent one time. The agent removed the property, and told the user what changed and why. |
+
+The checker ran for three of the prompts. Each time, the plugin dropped the engine's own copy of the checker report (the "hand-back"). The agent got only the plugin message, and only for the OUTDATED verdict.
 
 ## Cost and limits
 
