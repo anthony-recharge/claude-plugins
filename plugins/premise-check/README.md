@@ -1,6 +1,6 @@
 # premise-check
 
-Claude's knowledge of libraries and frameworks comes from its training data, and new releases often add the very feature it says is missing. For example, Claude might say Wolverine can't run on Dapr when a newer Wolverine release supports it. With this plugin, a cheap side agent (Haiku by default) watches the session for claims like that and gets them checked. It works the same way as Claude Code's built-in "You should know" watcher.
+Claude's knowledge of libraries and frameworks comes from its training data, and new releases often add the very feature it says is missing. For example, Claude might say that a library has no integration with a platform, or might build a workaround for a missing feature, when a newer release already supports it. With this plugin, a cheap side agent (Haiku by default) watches the session for claims like that and gets them checked. It works the same way as Claude Code's built-in "You should know" watcher.
 
 ## Install
 
