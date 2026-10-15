@@ -2,6 +2,10 @@
   "name": "premise-check",
   "version": "0.2.0",
   "description": "A Haiku side agent watches the session for claims about libraries, frameworks and versions made from stale training data, and gets them checked.",
+  "author": {
+    "name": "Anthony Allen",
+    "email": "anthony.allen@rechargeinfra.com"
+  },
   "types": "./types/index.d.ts",
   "userConfig": {
     "action": {

@@ -1,0 +1,16 @@
+{
+  "name": "anthony-plugins",
+  "owner": {
+    "name": "Anthony Allen",
+    "email": "anthony.allen@rechargeinfra.com"
+  },
+  "description": "Claude Code plugins that change how Claude Code behaves.",
+  "plugins": [
+    {
+      "name": "premise-check",
+      "source": "./plugins/premise-check",
+      "description": "A Haiku side agent watches the session for claims about libraries, frameworks and versions made from stale training data, and gets them checked.",
+      "version": "0.2.0"
+    }
+  ]
+}

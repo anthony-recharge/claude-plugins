@@ -146,7 +146,7 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // The checker is this mod's own; the main agent gets the system-prompt rule instead.
+  // The checker is this plugin's own; the main agent gets the system-prompt rule instead.
   on('agent.offer', { agent: CHECKER }, () => ({ isOffered: false }))
 
   on('prompt.compose', async ($, e, next) => {
