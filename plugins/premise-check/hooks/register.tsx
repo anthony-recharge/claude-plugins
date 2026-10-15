@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 import type { FindingStatus, FlaggedClaim } from '../types'
-import { CHECKER_PROMPT, WATCHER_SYSTEM, claimKey, digest, listed, lookupsBefore, parseWatch, verdictOf } from './watch'
+import { CHECKER_PROMPT, OUTDATED_REPORT_HEAD, WATCHER_SYSTEM, claimKey, digest, handbackFrom, listed, lookupsBefore, parseWatch, verdictOf } from './watch'
 
 type Action = 'nudge' | 'verify' | 'ask' | 'off'
 const ACTIONS: readonly Action[] = ['nudge', 'verify', 'ask', 'off']
@@ -24,6 +24,9 @@ let isTurnRunning = false
 let nextId = 1
 const flaggedKeys = new Set<string>()
 const pending = new Map<string, { id: number; claims: FlaggedClaim[] }>()
+// Every checker this plugin started. The engine hands a background agent's report to the main
+// agent by itself, before that agent's turn.complete; the plugin delivers outdated reports itself.
+const checkerIds = new Set<string>()
 
 async function actionOf($: EngineInterface): Promise<Action> {
   const stored = await $.store.get('action')
@@ -67,6 +70,7 @@ async function verify($: EngineInterface, id: number, claims: FlaggedClaim[]): P
     return
   }
   pending.set(spawned.agentId, { id, claims })
+  checkerIds.add(spawned.agentId)
   await setStatus($, id, 'verifying')
 }
 
@@ -155,6 +159,13 @@ export const register: Register = (on, options) => {
     return { ...composed, sections: [...composed.sections, { id: 'premise-check:freshness', text: FRESHNESS, scope: 'session' }] }
   })
 
+  on('prompt.submit', ($, e, next) => {
+    const from = handbackFrom(e.text)
+    if (e.origin.kind !== 'peer' || from === undefined || !checkerIds.has(from)) return next(e)
+    checkerIds.delete(from)
+    return { drop: 'premise-check: the checker report reaches Claude from premise-check, and only when a claim is outdated.' }
+  })
+
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) isTurnRunning = true
     return next(e)
@@ -186,7 +197,7 @@ export const register: Register = (on, options) => {
       await setStatus($, job.id, 'outdated')
       await tellAgent(
         $,
-        `[premise-check] An independent check found that something you relied on is outdated or wrong for current releases.
+        `${OUTDATED_REPORT_HEAD}
 
 What you stated or assumed:
 ${listed(job.claims)}
