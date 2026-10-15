@@ -10,7 +10,7 @@
       "name": "premise-check",
       "source": "./plugins/premise-check",
       "description": "A Haiku side agent watches the session for claims about libraries, frameworks and versions made from stale training data, and gets them checked.",
-      "version": "0.2.0"
+      "version": "0.2.1"
     }
   ]
 }

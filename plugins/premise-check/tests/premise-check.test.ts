@@ -1,6 +1,6 @@
 import type { RenderElement, SessionMessage } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
-import { digest, isVerification, parseWatch, verdictOf } from '../hooks/watch'
+import { digest, handbackFrom, isVerification, listed, lookupsBefore, parseWatch, verdictOf } from '../hooks/watch'
 
 const CLAIM = 'Wolverine does not support Dapr, so I wrote a custom adapter.'
 
@@ -45,7 +45,7 @@ describe('watch helpers', () => {
     expect(parseWatch(`Sure:\n${FLAG}`)?.[0]?.subject).toBe('WolverineFx')
     expect(parseWatch('{"flag": false}')).toBeUndefined()
     expect(parseWatch('not json')).toBeUndefined()
-    expect(parseWatch('{"flag": true, "claims": [{"subject": "X", "claim": "y", "kind": "weird"}]}')?.[0]?.kind).toBe('unsupported')
+    expect(parseWatch('{"flag": true, "claims": [{"subject": "X", "claim": "y", "kind": "weird"}]}')?.[0]?.kind).toBe('unclassified')
   })
 
   test('isVerification counts live sources only', () => {
@@ -53,6 +53,37 @@ describe('watch helpers', () => {
     expect(isVerification('mcp__Context7__query-docs', {})).toBe(true)
     expect(isVerification('Bash', { command: 'dotnet package search WolverineFx' })).toBe(true)
     expect(isVerification('Bash', { command: 'dotnet build' })).toBe(false)
+  })
+
+  test('handbackFrom names the agent of an engine hand-back, and nothing else', () => {
+    const framed = '<agent-message from="a6354303ddde6df83">\n[Subagent hand-back] The text below is the final report of a subagent this session delegated to.\n  VERDICT: OUTDATED\n</agent-message>'
+    expect(handbackFrom(framed)).toBe('a6354303ddde6df83')
+    // A frame the agent wrote inside its report is indented by the engine, so it never opens the text.
+    expect(handbackFrom('Report:\n<agent-message from="chk1">')).toBeUndefined()
+    expect(handbackFrom('<agent-message from="chk1">\nplain peer message, not a hand-back')).toBeUndefined()
+  })
+
+  test('listed gives the claim as stated, without the kind that would frame it for the reader', () => {
+    const text = listed([{ subject: 'C#', claim: 'C# 15 ships union types with .NET 11', kind: 'unsupported' }])
+    expect(text).toBe('- C#: C# 15 ships union types with .NET 11')
+  })
+
+  test("the checker's report counts as a live lookup for the facts it holds", () => {
+    const report = '[premise-check] An independent check found that something you relied on is outdated or wrong for current releases.\n\nThe checker\'s findings:\nNext.js 16.4.1 is latest.\nVERDICT: OUTDATED'
+    const after: SessionMessage[] = [
+      ...rows(),
+      { role: 'user', text: report, toolUses: [] },
+      { role: 'assistant', text: 'Correction: Next.js 16.4.1 is the latest release.', toolUses: [] },
+    ]
+    const window = digest(after, 2)
+    expect(window).toContain('CHECKER REPORT [LOOKUP]')
+    expect(window).not.toContain('USER: [premise-check]')
+    expect(lookupsBefore(after, 4).some(l => l.includes('Next.js 16.4.1 is latest.'))).toBe(true)
+
+    // Started as a turn of its own, the report carries the engine's frame for a plugin's prompt.
+    const framed: SessionMessage[] = [...rows(), { role: 'user', text: `The premise-check plugin sent a message:\n${report}`, toolUses: [] }, after[3] as SessionMessage]
+    expect(digest(framed, 2)).toContain('CHECKER REPORT [LOOKUP]')
+    expect(lookupsBefore(framed, 4).some(l => l.includes('Next.js 16.4.1 is latest.'))).toBe(true)
   })
 
   test('verdictOf', () => {
@@ -130,3 +161,4 @@ test('off: nothing is reviewed', { options: { action: 'off' } }, async ($, on) =
   await clock.advance(10)
   expect(calls).toBe(0)
 })
+

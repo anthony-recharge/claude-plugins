@@ -3,7 +3,7 @@ export type FlaggedClaim = {
   subject: string
   /** What the agent stated or assumed, in a few words. */
   claim: string
-  /** unsupported | version | workaround | api */
+  /** unsupported | version | workaround | api, or unclassified when the watcher named none of these */
   kind: string
 }
 

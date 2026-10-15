@@ -12,9 +12,11 @@ Flag a claim when the agent, WITHOUT having checked a live source (web search, w
 - builds a workaround, shim, custom adapter or hand-rolled replacement because it believes a feature is missing (kind: workaround)
 - writes code against an API of a fast-moving library in a way that hinges on details likely to have changed, and says nothing about having checked (kind: api; use sparingly)
 
+Write "claim" as the agent stated it, with the same polarity: if the agent said a feature exists or ships, the claim says it exists or ships, even when the user's question expected it to be missing. Choose "kind" from the agent's own words, never from the user's question.
+
 Do NOT flag:
 - statements about the project's own code, files, tests or errors seen in tool output
-- things the agent verified via a lookup listed in the transcript
+- things the agent verified via a lookup listed in the transcript, a CHECKER REPORT included: facts the agent repeats from one were checked
 - things the user stated themselves
 - general, stable facts (language syntax, long-established standard library behaviour)
 - claims listed as already flagged
@@ -24,6 +26,9 @@ The bar is high: most windows have nothing to flag. Answer with JSON only, no pr
 or
 {"flag": true, "claims": [{"subject": "<library or service>", "claim": "<what was stated or assumed, under 15 words>", "kind": "unsupported|version|workaround|api"}]}
 At most 3 claims.`
+
+/** How premise-check's own message opens when its checker found a claim outdated. */
+export const OUTDATED_REPORT_HEAD = '[premise-check] An independent check found that something you relied on is outdated or wrong for current releases.'
 
 export const CHECKER_PROMPT = `You fact-check claims another AI agent made about third-party software (libraries, frameworks, SDKs, CLIs, hosted services) from possibly stale training data. Assume the claims may be outdated: newer releases often add the capability that was said to be missing. Do not answer from memory.
 
@@ -73,7 +78,21 @@ function describeToolUse(tool: string, input: Record<string, unknown>): string {
 }
 
 function isPrompt(m: SessionMessage): boolean {
-  return m.role === 'user' && (m.toolResults === undefined || m.toolResults.length === 0) && m.text.trim() !== ''
+  return m.role === 'user' && (m.toolResults === undefined || m.toolResults.length === 0) && m.text.trim() !== '' && !isCheckerReport(m)
+}
+
+// Started as a turn of its own, a plugin's prompt carries the engine's frame line; delivered into a running turn, none.
+const PLUGIN_PROMPT_FRAME = 'The premise-check plugin sent a message:\n'
+
+/** The checker's report without the engine's frame, when the message is premise-check's own outdated report. */
+function checkerReportOf(m: SessionMessage): string | undefined {
+  if (m.role !== 'user') return undefined
+  const text = m.text.startsWith(PLUGIN_PROMPT_FRAME) ? m.text.slice(PLUGIN_PROMPT_FRAME.length) : m.text
+  return text.startsWith(OUTDATED_REPORT_HEAD) ? text : undefined
+}
+
+function isCheckerReport(m: SessionMessage): boolean {
+  return checkerReportOf(m) !== undefined
 }
 
 /**
@@ -89,6 +108,11 @@ export function digest(messages: readonly SessionMessage[], from: number, maxCha
     if (m === undefined) continue
     if (isPrompt(m)) {
       lines.push(`USER: ${clip(m.text, 1500)}`)
+      continue
+    }
+    const report = checkerReportOf(m)
+    if (report !== undefined) {
+      lines.push(`CHECKER REPORT [LOOKUP]: ${clip(report, 2500)}`)
       continue
     }
     if (m.role !== 'assistant') continue
@@ -120,7 +144,10 @@ export function digest(messages: readonly SessionMessage[], from: number, maxCha
 export function lookupsBefore(messages: readonly SessionMessage[], upTo: number): string[] {
   const found: string[] = []
   for (let i = 0; i < Math.min(upTo, messages.length); i++) {
-    for (const u of messages[i]?.toolUses ?? []) {
+    const m = messages[i]
+    const report = m === undefined ? undefined : checkerReportOf(m)
+    if (report !== undefined) found.push(`-> premise-check checker report [LOOKUP]: ${clip(report.slice(OUTDATED_REPORT_HEAD.length), 1500)}`)
+    for (const u of m?.toolUses ?? []) {
       if (isVerification(u.tool, u.input)) found.push(describeToolUse(u.tool, { ...u.input, new_string: undefined, content: undefined }).trim())
     }
   }
@@ -148,7 +175,7 @@ export function parseWatch(reply: string): FlaggedClaim[] | undefined {
     if (typeof c !== 'object' || c === null) continue
     const { subject, claim, kind } = c as Record<string, unknown>
     if (typeof subject !== 'string' || typeof claim !== 'string' || subject.trim() === '' || claim.trim() === '') continue
-    out.push({ subject: subject.trim(), claim: claim.trim(), kind: typeof kind === 'string' && KINDS.has(kind) ? kind : 'unsupported' })
+    out.push({ subject: subject.trim(), claim: claim.trim(), kind: typeof kind === 'string' && KINDS.has(kind) ? kind : 'unclassified' })
   }
   return out.length > 0 ? out.slice(0, 3) : undefined
 }
@@ -158,7 +185,17 @@ export function claimKey(c: FlaggedClaim): string {
 }
 
 export function listed(claims: readonly FlaggedClaim[]): string {
-  return claims.map(c => `- ${c.subject}: ${c.claim} (${c.kind})`).join('\n')
+  return claims.map(c => `- ${c.subject}: ${c.claim}`).join('\n')
+}
+
+const HANDBACK = /^<agent-message from="([^"]+)">\n\[Subagent hand-back\]/
+
+/**
+ * The agent whose report this is, when the text is the engine's own hand-back of a background
+ * agent's final report. The engine indents every line of the report, so the frame can only open the text.
+ */
+export function handbackFrom(text: string): string | undefined {
+  return HANDBACK.exec(text)?.[1]
 }
 
 export type Verdict = 'OUTDATED' | 'CONFIRMED' | 'UNCERTAIN'
