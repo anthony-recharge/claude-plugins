@@ -1,6 +1,14 @@
 # premise-check
 
-Claude's knowledge of libraries and frameworks comes from its training data, and new releases often add the very feature it says is missing. For example, Claude might say Wolverine can't run on Dapr when a newer Wolverine release supports it. With this mod, a cheap side agent (Haiku by default) watches the session for claims like that and gets them checked. It works the same way as Claude Code's built-in "You should know" watcher.
+Claude's knowledge of libraries and frameworks comes from its training data, and new releases often add the very feature it says is missing. For example, Claude might say Wolverine can't run on Dapr when a newer Wolverine release supports it. With this plugin, a cheap side agent (Haiku by default) watches the session for claims like that and gets them checked. It works the same way as Claude Code's built-in "You should know" watcher.
+
+## Install
+
+```
+/plugin install premise-check --marketplace anthony-recharge/claude-plugins
+```
+
+See the [repository README](../../README.md) for other ways to install.
 
 ## How it works
 
@@ -41,7 +49,7 @@ You can also change the watcher model, the checker model and how many steps pass
 ## Develop
 
 ```
-claude plugin validate premise-check
-claude plugin test premise-check
-claude --plugin-dir ./premise-check
+claude plugin validate plugins/premise-check
+claude plugin test plugins/premise-check
+claude --plugin-dir ./plugins/premise-check
 ```
